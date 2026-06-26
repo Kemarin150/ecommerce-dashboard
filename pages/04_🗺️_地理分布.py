@@ -50,7 +50,7 @@ city_data = valid.groupby("city").agg(
     customers=("customer_id", "nunique"),
 ).reset_index()
 
-# 优先用数据自带的经纬度列（上传数据），否则用内置坐标
+# 优先用数据自带的经纬度列，否则用内置坐标
 if "city_lat" in valid.columns and "city_lon" in valid.columns:
     coords = valid[["city", "city_lat", "city_lon"]].drop_duplicates()
     city_data = city_data.merge(coords, on="city", how="left")
@@ -60,6 +60,8 @@ else:
     city_data["lon"] = city_data["city"].map(lambda c: CITY_COORDS.get(c, (None, None))[1])
 city_mapped = city_data.dropna(subset=["lat", "lon"]).copy()
 city_unmapped = city_data[city_data["lat"].isna()]
+mapped_pct = len(city_mapped) / max(len(city_data), 1) * 100
+has_city_coords = mapped_pct >= 30  # 至少30%城市有坐标才显示地图
 
 # ---- 侧边栏 ----
 with st.sidebar:
@@ -130,62 +132,58 @@ elif view_mode == "📍 城市气泡地图":
     st.markdown("### 📍 城市级别销售分布")
 
     if len(city_unmapped) > 0:
-        missing = ", ".join(city_unmapped["city"].tolist())
-        st.warning(f"以下城市缺少坐标数据，未在地图显示：{missing}")
+        n_missing = len(city_unmapped)
+        if n_missing <= 20:
+            missing = ", ".join(city_unmapped["city"].tolist())
+        else:
+            top_missing = city_unmapped["city"].head(10).tolist()
+            missing = ", ".join(top_missing) + f" ...等{n_missing}个城市"
+        st.info(f"当前数据集无城市经纬度，{n_missing}个城市未在地图显示。"
+                 "上传含 city_lat/city_lon 列的数据可自动映射。", icon="ℹ")
 
-    col_map, col_chart = st.columns([3, 2])
-
-    with col_map:
-        st.markdown("#### 城市销售气泡地图 (Plotly ScatterGeo)")
-
-        fig = px.scatter_geo(
-            city_mapped, lat="lat", lon="lon",
-            size="sales", color="sales",
-            color_continuous_scale="Blues",
-            hover_name="city",
-            hover_data={"sales": ":,.0f", "orders": True, "customers": True, "lat": False, "lon": False},
-            size_max=40,
-            projection="natural earth",
-            labels={"sales": "销售额", "orders": "订单数", "customers": "客户数"}
-        )
-
-        # 地图中心根据数据自动计算
-        map_center = dict(lat=city_mapped["lat"].mean(), lon=city_mapped["lon"].mean())
-        fig.update_geos(
-            center=map_center,
-            projection_scale=3,
-            showland=True, landcolor="#F8F8F8",
-            showcountries=True, countrycolor="#DDDDDD",
-            coastlinecolor="#CCCCCC",
-            showocean=True, oceancolor="#F0F8FF",
-            fitbounds="locations",
-        )
-        fig.update_layout(**PLOTLY_TUFTE_LAYOUT)
-        fig.update_layout(title="", height=550, margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col_chart:
-        st.markdown("#### 🏙️ 城市 Top 15")
-        top15 = city_mapped.sort_values("sales", ascending=True).tail(15)
-        fig = px.bar(top15, x="sales", y="city", orientation="h",
-                     text=top15["sales"].apply(lambda x: f"¥{x/10000:.1f}万"),
+    if has_city_coords:
+        col_map, col_chart = st.columns([3, 2])
+        with col_map:
+            st.markdown("#### 城市销售气泡地图 (Plotly ScatterGeo)")
+            fig = px.scatter_geo(
+                city_mapped, lat="lat", lon="lon",
+                size="sales", color="sales",
+                color_continuous_scale="Blues",
+                hover_name="city",
+                hover_data={"sales": ":,.0f", "orders": True, "customers": True, "lat": False, "lon": False},
+                size_max=40, projection="natural earth",
+                labels={"sales": "销售额", "orders": "订单数", "customers": "客户数"}
+            )
+            map_center = dict(lat=city_mapped["lat"].mean(), lon=city_mapped["lon"].mean())
+            fig.update_geos(
+                center=map_center, projection_scale=3,
+                showland=True, landcolor="#F8F8F8",
+                showcountries=True, countrycolor="#DDDDDD",
+                coastlinecolor="#CCCCCC",
+                showocean=True, oceancolor="#F0F8FF",
+                fitbounds="locations",
+            )
+            fig.update_layout(**PLOTLY_TUFTE_LAYOUT, title="", height=550,
+                              margin=dict(l=10, r=10, t=10, b=10))
+            st.plotly_chart(fig, use_container_width=True)
+        with col_chart:
+            st.markdown("#### 🏙️ 城市 Top 15")
+            top15 = city_mapped.sort_values("sales", ascending=True).tail(15)
+            fig = px.bar(top15, x="sales", y="city", orientation="h",
+                         text=top15["sales"].apply(lambda x: f"¥{x/10000:.1f}万"),
+                         color="sales", color_continuous_scale="Blues")
+            fig.update_layout(**PLOTLY_TUFTE_LAYOUT, title="", yaxis_title="",
+                              xaxis_title="销售额 (元)", showlegend=False, height=500)
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("城市坐标覆盖率不足30%，切换为柱状图模式。上传含 city_lat/city_lon 列的数据可启用地图。")
+        top_all = city_data.sort_values("sales", ascending=True).tail(20)
+        fig = px.bar(top_all, x="sales", y="city", orientation="h",
+                     text=top_all["sales"].apply(lambda x: f"¥{x/10000:.1f}万"),
                      color="sales", color_continuous_scale="Blues")
-        fig.update_layout(**PLOTLY_TUFTE_LAYOUT)
-        fig.update_layout(title="", yaxis_title="", xaxis_title="销售额 (元)",
-                          showlegend=False, height=500)
+        fig.update_layout(**PLOTLY_TUFTE_LAYOUT, title="城市销售额 Top 20",
+                          yaxis_title="", xaxis_title="销售额 (元)", showlegend=False, height=550)
         st.plotly_chart(fig, use_container_width=True)
-
-    # 城市销售 vs 订单量散点
-    st.markdown("---")
-    st.markdown("#### 城市销售额 vs 订单量 (气泡大小=客户数)")
-    fig = px.scatter(city_mapped, x="orders", y="sales", size="customers",
-                      text="city", color="sales", color_continuous_scale="Blues",
-                      hover_name="city",
-                      labels={"orders": "订单数", "sales": "销售额 (元)", "customers": "客户数"})
-    fig.update_layout(**PLOTLY_TUFTE_LAYOUT)
-    fig.update_layout(title="", height=450)
-    fig.update_traces(textposition="top center", textfont_size=10)
-    st.plotly_chart(fig, use_container_width=True)
 
 # ================================================================
 # 视图3: 区域对比分析
