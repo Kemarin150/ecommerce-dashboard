@@ -46,7 +46,7 @@ if analysis == "📊 相关性热力图":
             "订单数": monthly["order_id"].nunique(),
             "客户数": monthly["customer_id"].nunique(),
             "平均客单价": monthly["total_amount"].sum() / monthly["order_id"].nunique(),
-            "退货数": len(monthly) - len(get_valid_orders(monthly)),
+            "退货数": monthly.apply(lambda x: len(x) - len(get_valid_orders(x))),
         }).dropna()
 
         corr = monthly_metrics.corr()
