@@ -50,13 +50,14 @@ if analysis == "📊 相关性热力图":
         }).dropna()
 
         corr = monthly_metrics.corr()
-        fig, ax = plt.subplots(figsize=(6, 5))
+        # 用 Plotly 替代 Seaborn（Cloud 服务器无中文字体，Plotly 走浏览器渲染）
         mask = np.triu(np.ones_like(corr, dtype=bool))
-        sns.heatmap(corr, annot=True, fmt=".3f", cmap="RdBu_r", center=0,
-                     mask=mask, ax=ax, square=True, linewidths=.5,
-                     cbar_kws={"shrink": .5})
-        ax.set_title("月度指标相关性", fontsize=13, fontweight="bold")
-        st.pyplot(fig)
+        corr_masked = corr.where(~mask)
+        fig = px.imshow(corr_masked, text_auto=".3f", color_continuous_scale="RdBu_r",
+                        zmin=-1, zmax=1, aspect="auto")
+        fig.update_layout(**PLOTLY_TUFTE_LAYOUT, title="月度指标相关性", height=480)
+        fig.update_xaxes(side="top")
+        st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("#### 每日指标")
         daily = valid.set_index("date").resample("D")
@@ -68,12 +69,13 @@ if analysis == "📊 相关性热力图":
         }).dropna()
 
         corr_d = daily_metrics.corr()
-        fig, ax = plt.subplots(figsize=(6, 5))
-        sns.heatmap(corr_d, annot=True, fmt=".3f", cmap="RdBu_r", center=0,
-                     mask=np.triu(np.ones_like(corr_d, dtype=bool)),
-                     ax=ax, square=True, linewidths=.5, cbar_kws={"shrink": .5})
-        ax.set_title("每日指标相关性", fontsize=13, fontweight="bold")
-        st.pyplot(fig)
+        mask_d = np.triu(np.ones_like(corr_d, dtype=bool))
+        corr_d_masked = corr_d.where(~mask_d)
+        fig2 = px.imshow(corr_d_masked, text_auto=".3f", color_continuous_scale="RdBu_r",
+                         zmin=-1, zmax=1, aspect="auto")
+        fig2.update_layout(**PLOTLY_TUFTE_LAYOUT, title="每日指标相关性", height=480)
+        fig2.update_xaxes(side="top")
+        st.plotly_chart(fig2, use_container_width=True)
 
     with col_b:
         st.markdown("#### 品类×月份 销售额热力图")
