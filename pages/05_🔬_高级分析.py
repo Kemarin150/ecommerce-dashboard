@@ -213,16 +213,15 @@ elif analysis == "💹 毛利结构分析":
 
     with col_l:
         st.markdown("#### 品类毛利率对比 (箱线图)")
-        fig, ax = plt.subplots(figsize=(6, 5))
         order_cats = prod_sales.groupby("category")["margin_pct"].median().sort_values().index.tolist()
-        sns.boxplot(data=prod_sales, x="category", y="margin_pct", order=order_cats,
-                    palette=[TUFTE_COLORS[i % len(TUFTE_COLORS)] for i in range(len(order_cats))],
-                    ax=ax, width=0.5)
-        ax.axhline(y=0, color="red", linewidth=1, linestyle="--", alpha=0.5)
-        ax.set_title("各品类毛利率分布", fontsize=13, fontweight="bold")
-        ax.set_xlabel(""); ax.set_ylabel("毛利率 (%)")
-        ax.tick_params(axis="x", rotation=30)
-        st.pyplot(fig)
+        fig = px.box(prod_sales, x="category", y="margin_pct",
+                      category_orders={"category": order_cats},
+                      color="category",
+                      color_discrete_sequence=TUFTE_COLORS[:len(order_cats)])
+        fig.add_hline(y=0, line_dash="dash", line_color="red", opacity=0.5)
+        fig.update_layout(**PLOTLY_TUFTE_LAYOUT, title="各品类毛利率分布",
+                          xaxis_title="", yaxis_title="毛利率 (%)", showlegend=False, height=450)
+        st.plotly_chart(fig, use_container_width=True)
 
     with col_r:
         st.markdown("#### 毛利率月度趋势")
