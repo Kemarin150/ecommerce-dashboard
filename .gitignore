@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+*.docx
+数据可视化课程*.txt
+generate_report.py
+convert_olist.py
+data_generator.py
+data/olist_samples/
+.streamlit/
